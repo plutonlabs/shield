@@ -2,6 +2,7 @@ using System.Diagnostics;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using PlutonShield.Core.Runtime;
+using PlutonShield.Core.Update;
 
 namespace PlutonShield.App.Pages;
 
@@ -23,6 +24,7 @@ public sealed partial class SettingsPage : Page
             LanguageBox.SelectedIndex = s.Language switch { "vi" => 1, "en" => 2, _ => 0 };
             StartWithWindows.IsOn = s.StartWithWindows;
             StartMinimized.IsOn = s.StartMinimized;
+            AutoAppUpdate.IsOn = s.AutoAppUpdate;
             AutoUpdate.IsOn = s.AutoUpdate;
             Interval.Value = s.UpdateIntervalHours;
             Cosmetic.IsOn = s.CosmeticFiltering;
@@ -31,10 +33,66 @@ public sealed partial class SettingsPage : Page
             Excluded.Text = string.Join(Environment.NewLine, s.ExcludedHosts);
             Port.Value = s.Port;
             RefreshCert();
+            VersionText.Text = Loc.T("settings.version", Rt.AppUpdates.Current.ToString());
         }
         finally
         {
             _loading = false;
+        }
+
+        Rt.AppUpdates.Changed -= OnUpdatesChanged;
+        Rt.AppUpdates.Changed += OnUpdatesChanged;
+        RefreshUpdateStatus(null);
+    }
+
+    private void Page_Unloaded(object sender, RoutedEventArgs e) => Rt.AppUpdates.Changed -= OnUpdatesChanged;
+
+    private void OnUpdatesChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(() => RefreshUpdateStatus(null));
+
+    /// <summary>The line under the version: what the last check found (<paramref name="checking"/> is the line to show while one runs).</summary>
+    private void RefreshUpdateStatus(string? checking)
+    {
+        var u = Rt.AppUpdates;
+        ViewUpdateButton.Visibility = u.Info is null ? Visibility.Collapsed : Visibility.Visible;
+        UpdateStatusText.Text = checking
+            ?? (u.Info is { } info ? Loc.T("settings.update.found", info.Version.ToString())
+                : u.Error is { Length: > 0 } err ? Loc.T("settings.update.fail", err)
+                : u.LastCheck is { } at ? Loc.T("settings.update.uptodate", at.ToString("HH:mm:ss"))
+                : "");
+    }
+
+    private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        CheckButton.IsEnabled = false;
+        RefreshUpdateStatus(Loc.T("settings.update.checking"));
+        try
+        {
+            await Rt.AppUpdates.CheckAsync();
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText.Text = Loc.T("settings.update.fail", ex.Message);
+            return;
+        }
+        finally
+        {
+            CheckButton.IsEnabled = true;
+        }
+
+        RefreshUpdateStatus(null);
+    }
+
+    private void ViewUpdate_Click(object sender, RoutedEventArgs e) => ((App)Application.Current).MainWindow?.ShowUpdatePage();
+
+    private void OpenGitHub_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(ReleaseFeed.ProjectUrl) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusText.Text = Loc.T("settings.update.fail", ex.Message);
         }
     }
 
@@ -69,6 +127,7 @@ public sealed partial class SettingsPage : Page
             s.Language = language;
             s.StartWithWindows = StartWithWindows.IsOn;
             s.StartMinimized = StartMinimized.IsOn;
+            s.AutoAppUpdate = AutoAppUpdate.IsOn;
             s.AutoUpdate = AutoUpdate.IsOn;
             s.UpdateIntervalHours = interval;
             s.CosmeticFiltering = Cosmetic.IsOn;

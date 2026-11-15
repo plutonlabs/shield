@@ -21,6 +21,9 @@ public sealed class AppSettings
 
     public bool AutoUpdate { get; set; } = true;
 
+    /// <summary>Check for a new version of the app now and then and download it ahead; installing is always the user's click.</summary>
+    public bool AutoAppUpdate { get; set; } = true;
+
     public int UpdateIntervalHours { get; set; } = 6;
 
     public bool StartWithWindows { get; set; }

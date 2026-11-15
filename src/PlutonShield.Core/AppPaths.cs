@@ -39,6 +39,9 @@ public sealed class AppPaths
 
     public string CacheDir => Path.Combine(Root, "cache");
 
+    /// <summary>Installers of new app versions, between the download and the install (created when needed).</summary>
+    public string UpdatesDir => Path.Combine(Root, "updates");
+
     public string CertDir => Path.Combine(Root, "cert");
 
     public string LogDir => Path.Combine(Root, "logs");

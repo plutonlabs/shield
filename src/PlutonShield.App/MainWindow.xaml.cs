@@ -43,6 +43,9 @@ public sealed partial class MainWindow : Window
         AppWindow.Closing += OnClosing;
         Nav.SelectedItem = Nav.MenuItems[0];
         Loc.Changed += (_, _) => DispatcherQueue.TryEnqueue(Relocalize);
+
+        App.Runtime.AppUpdates.Changed += (_, _) => DispatcherQueue.TryEnqueue(RefreshUpdateItem);
+        RefreshUpdateItem();
     }
 
     /// <summary>The language was changed: new texts in the menu, and the open page is built again.</summary>
@@ -55,6 +58,21 @@ public sealed partial class MainWindow : Window
 
         if (ContentFrame.CurrentSourcePageType is { } page) ContentFrame.Navigate(page);
     }
+
+    /// <summary>The bell above "Settings" is there while a newer version of the app is known.</summary>
+    private void RefreshUpdateItem()
+    {
+        UpdateNavItem.Visibility = App.Runtime.AppUpdates.Info is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>Opens the update page (the bell is shown first if it was not).</summary>
+    public void ShowUpdatePage()
+    {
+        RefreshUpdateItem();
+        Nav.SelectedItem = UpdateNavItem;
+    }
+
+    public void ShowHome() => Nav.SelectedItem = Nav.MenuItems[0];
 
     private void OnClosing(AppWindow sender, AppWindowClosingEventArgs args)
     {
@@ -81,6 +99,7 @@ public sealed partial class MainWindow : Window
             "custom" => typeof(CustomFiltersPage),
             "stats" => typeof(StatsPage),
             "settings" => typeof(SettingsPage),
+            "update" => typeof(UpdatePage),
             _ => typeof(HomePage),
         };
         ContentFrame.Navigate(page);

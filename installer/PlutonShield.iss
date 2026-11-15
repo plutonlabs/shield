@@ -77,6 +77,8 @@ Name: "{autodesktop}\Pluton Shield"; Filename: "{app}\PlutonShield.exe"; Tasks: 
 
 [Run]
 Filename: "{app}\PlutonShield.exe"; Description: "{cm:LaunchProgram,Pluton Shield}"; Flags: nowait postinstall skipifsilent
+; The app's own update starts Setup quietly with /RELAUNCH=1 (see AppUpdateService.SetupArguments): open the new version again.
+Filename: "{app}\PlutonShield.exe"; Parameters: "--restarted"; Flags: nowait; Check: RelaunchRequested
 
 [UninstallRun]
 ; In this order: close the app (it gives the Windows proxy setting back), then remove what is left outside its folder
@@ -94,6 +96,11 @@ Type: files; Name: "{autodesktop}\NeatShield.lnk"
 Type: filesandordirs; Name: "{app}"
 
 [Code]
+function RelaunchRequested: Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
+end;
+
 function PrepareToInstall(var NeedsRestart: Boolean): String;
 var
   ExePath: String;

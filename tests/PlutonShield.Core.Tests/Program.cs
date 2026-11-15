@@ -354,6 +354,8 @@ Eq(1, langChanged, "Loc.Changed only on a real change");
     }
 }
 
+fail += await UpdateTests.RunAsync();
+
 Console.WriteLine(fail==0?"ALL OK":$"{fail} FAILED");
 return fail;
 

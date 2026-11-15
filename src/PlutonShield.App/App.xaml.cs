@@ -30,6 +30,8 @@ public partial class App : Application
 
     public static ShieldRuntime Runtime { get; private set; } = null!;
 
+    public MainWindow? MainWindow => _window;
+
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         // Commands for the installer. Nothing is shown and no copy of the app is started.
@@ -131,6 +133,17 @@ public partial class App : Application
         }
 
         ExitApp();
+    }
+
+    /// <summary>
+    /// Starts the downloaded installer, which closes this copy (it asks for that itself), installs the new version and
+    /// opens it. Returns false, and keeps running, when the installer could not be started.
+    /// </summary>
+    public bool InstallUpdateAndExit()
+    {
+        if (!Runtime.AppUpdates.StartSetup()) return false;
+        ExitApp();
+        return true;
     }
 
     private void ExitApp()

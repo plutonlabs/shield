@@ -18,7 +18,7 @@ public static class Diagnostics
         sb.AppendLine("Pluton Shield diagnostics");
         sb.AppendLine("======================");
         Line("Time", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss zzz"));
-        Line("App", typeof(ShieldRuntime).Assembly.GetName().Version?.ToString());
+        Line("App", PlutonShield.Core.Update.AppVersion.Current.ToString());
         Line("System", $"{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture}), {RuntimeInformation.FrameworkDescription}");
         Line("Language", rt.Settings.Current.EffectiveLanguage + (string.IsNullOrEmpty(rt.Settings.Current.Language) ? " (automatic)" : ""));
         Line("Data folder", rt.Paths.Root);
@@ -60,6 +60,7 @@ public static class Diagnostics
         Line("Element hiding", s.CosmeticFiltering ? "on" : "off");
         Line("Pop-ups", s.BlockPopups ? "blocked" : "allowed");
         Line("Auto update", s.AutoUpdate ? $"every {s.UpdateIntervalHours} h" : "off");
+        Line("App updates", s.AutoAppUpdate ? "checked automatically" : "manual only");
         Line("Excluded sites", s.ExcludedHosts.Count.ToString());
 
         var st = rt.Stats.Snapshot();

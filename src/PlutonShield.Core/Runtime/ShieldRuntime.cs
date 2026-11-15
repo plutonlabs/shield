@@ -5,6 +5,7 @@ using PlutonShield.Core.Proxy;
 using PlutonShield.Core.Security;
 using PlutonShield.Core.Settings;
 using PlutonShield.Core.Stats;
+using PlutonShield.Core.Update;
 using Titanium.Web.Proxy;
 
 namespace PlutonShield.Core.Runtime;
@@ -49,6 +50,7 @@ public sealed class ShieldRuntime : IDisposable
         { Timeout = TimeSpan.FromMinutes(5) };
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("PlutonShield/1.0");
         Updater = new FilterUpdater(_http, Filters);
+        AppUpdates = new AppUpdateService(_http, Paths.UpdatesDir);
 
         Settings.Changed += OnSettingsChanged;
         AppDomain.CurrentDomain.ProcessExit += OnProcessExit;
@@ -63,6 +65,9 @@ public sealed class ShieldRuntime : IDisposable
     public ProxyService Proxy { get; }
     public CertificateService Certificate { get; }
     public FilterUpdater Updater { get; }
+
+    /// <summary>New versions of the app itself (the filters update separately, see <see cref="Updater"/>).</summary>
+    public AppUpdateService AppUpdates { get; }
 
     public ProtectionState State { get; private set; } = ProtectionState.Off;
     public string? Error { get; private set; }
@@ -94,6 +99,7 @@ public sealed class ShieldRuntime : IDisposable
         }
 
         _background = Task.Run(() => BackgroundLoopAsync(_cts.Token));
+        _ = Task.Run(() => AppUpdateLoopAsync(_cts.Token));
     }
 
     // ---- protection on / off ----
@@ -299,6 +305,46 @@ public sealed class ShieldRuntime : IDisposable
         catch (Exception ex)
         {
             Log.Error($"background loop: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// The app's own updates: look for a newer release soon after the start and then every 12 hours (an hour after a failure),
+    /// and download the installer ahead, so that "Update now" only has to start it. Installing is never done without the user.
+    /// </summary>
+    private async Task AppUpdateLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            AppUpdates.CleanDownloads(); // this version is installed: its installer is not needed any more
+            await Task.Delay(TimeSpan.FromSeconds(45), ct);
+            while (!ct.IsCancellationRequested)
+            {
+                if (Settings.Current.AutoAppUpdate)
+                {
+                    var wait = TimeSpan.FromHours(AppUpdates.LastAttemptFailed ? 1 : 12);
+                    if (AppUpdates.LastAttempt is null || DateTime.Now - AppUpdates.LastAttempt >= wait)
+                    {
+                        await AppUpdates.CheckAsync(ct);
+                    }
+
+                    if (AppUpdates.State == AppUpdateState.Available &&
+                        (AppUpdates.LastDownloadFailure is null || DateTime.Now - AppUpdates.LastDownloadFailure >= TimeSpan.FromHours(1)))
+                    {
+                        await AppUpdates.DownloadAsync(ct);
+                    }
+                }
+
+                await Task.Delay(TimeSpan.FromMinutes(1), ct);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // closing
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"app update loop: {ex}");
         }
     }
 
