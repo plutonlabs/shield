@@ -1,0 +1,17 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+dist/
+# Native library and the bundled filter release are fetched by tools/*.ps1
+native/*.dll
+native/*.so
+native/*.sha256
+filters/*
+!filters/.gitkeep
+tests/js/node_modules/
+tests/e2e/node_modules/
+tests/e2e/package-lock.json
+release/
+installer-out/
