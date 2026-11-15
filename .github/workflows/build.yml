@@ -1,0 +1,36 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [ x64, arm64 ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Build (fetches neat_adblock.dll and the filters, runs the C# and page-script tests, publishes)
+        shell: pwsh
+        run: ./tools/build.ps1 -Arch ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlutonShield-${{ matrix.arch }}
+          path: dist/${{ matrix.arch }}
+      - name: Installer (test build, quick compression)
+        shell: pwsh
+        run: ./tools/make-installer.ps1 -Arch ${{ matrix.arch }} -Version 0.0.0-ci -OutDir installer-out -Fast
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PlutonShield-Setup-${{ matrix.arch }}
+          path: installer-out/*.exe
