@@ -1,0 +1,46 @@
+name: icons
+
+# Turns the big app icon (a PNG) into the .ico files the app and the installer use.
+# Runs when the PNG changes (or by hand: Actions -> icons -> Run workflow) and commits the new .ico files back.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/PlutonShield.App/Assets/shield2000x2000.png
+      - tools/make_icons.py
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: icons
+  cancel-in-progress: false
+
+jobs:
+  ico:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pillow
+        run: pip install pillow
+
+      - name: Build plutonshield.ico and plutonshield-off.ico
+        run: python tools/make_icons.py src/PlutonShield.App/Assets/shield2000x2000.png src/PlutonShield.App/Assets
+
+      - name: Commit the new icons
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/PlutonShield.App/Assets/plutonshield.ico src/PlutonShield.App/Assets/plutonshield-off.ico
+          if git diff --cached --quiet; then
+            echo "The icons did not change."
+          else
+            git commit -m "Update app icons from shield2000x2000.png"
+            git push
+          fi
