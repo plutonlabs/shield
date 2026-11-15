@@ -1,0 +1,37 @@
+<Window
+    x:Class="PlutonShield.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:loc="using:PlutonShield.App">
+
+    <Grid>
+        <NavigationView x:Name="Nav"
+                        PaneDisplayMode="Left"
+                        OpenPaneLength="220"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        IsTitleBarAutoPaddingEnabled="False"
+                        SelectionChanged="Nav_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem loc:L.Key="nav.home" Tag="home" Icon="Home" />
+                <NavigationViewItem loc:L.Key="nav.filters" Tag="filters" Icon="Filter" />
+                <NavigationViewItem loc:L.Key="nav.lists" Tag="lists" Icon="List" />
+                <NavigationViewItem loc:L.Key="nav.custom" Tag="custom" Icon="Edit" />
+                <NavigationViewItem loc:L.Key="nav.stats" Tag="stats" Icon="Calendar" />
+            </NavigationView.MenuItems>
+            <NavigationView.FooterMenuItems>
+                <NavigationViewItem loc:L.Key="nav.settings" Tag="settings" Icon="Setting" />
+            </NavigationView.FooterMenuItems>
+            <!-- 32 = height of the caption buttons: the page starts below them. -->
+            <Frame x:Name="ContentFrame" Margin="0,32,0,0" />
+        </NavigationView>
+
+        <!-- Only a strip to drag the window by. The menu button on the left (48) stays clickable; the minimize, maximize
+             and close buttons are drawn by Windows on the right. -->
+        <Grid x:Name="TitleBarDragRegion"
+              Height="32"
+              Margin="48,0,0,0"
+              VerticalAlignment="Top"
+              Background="Transparent" />
+    </Grid>
+</Window>

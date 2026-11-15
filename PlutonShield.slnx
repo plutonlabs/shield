@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PlutonShield.App/PlutonShield.App.csproj" />
+    <Project Path="src/PlutonShield.Cli/PlutonShield.Cli.csproj" />
+    <Project Path="src/PlutonShield.Core/PlutonShield.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PlutonShield.Core.Tests/PlutonShield.Core.Tests.csproj" />
+  </Folder>
+</Solution>
