@@ -35,6 +35,15 @@ public sealed class AppSettings
 
     public string FiltersBaseUrl { get; set; } = DefaultFiltersBaseUrl;
 
+    /// <summary>
+    /// Block adult websites (the HaGeZi NSFW list, downloaded only when this is switched on). Off by default; anyone can
+    /// switch it on or off, there is no password.
+    /// </summary>
+    public bool AdultFilter { get; set; }
+
+    /// <summary>While <see cref="AdultFilter"/> is on, keep SafeSearch on in Google, Bing, DuckDuckGo and YouTube.</summary>
+    public bool ForceSafeSearch { get; set; } = true;
+
     /// <summary>Hosts that are never decrypted or filtered. "example.com" also covers its subdomains; "*.example.com" is the same.</summary>
     public List<string> ExcludedHosts { get; set; } = new();
 

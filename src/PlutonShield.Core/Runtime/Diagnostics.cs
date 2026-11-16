@@ -38,6 +38,7 @@ public static class Diagnostics
         var custom = rt.Settings.Current.CustomFilters;
         Line("Custom rules", string.IsNullOrWhiteSpace(custom) ? "none" : custom.Split('\n').Count(l => l.Trim().Length > 0 && !l.TrimStart().StartsWith('!')) + " lines");
         Line("Last update", rt.LastUpdateCheck?.ToString("yyyy-MM-dd HH:mm:ss") ?? "not checked in this run");
+        Line("Adult filter", rt.Settings.Current.AdultFilter ? rt.Adult.Describe() : "off");
 
         sb.AppendLine().AppendLine("Certificate");
         try
@@ -59,6 +60,7 @@ public static class Diagnostics
         Line("HTTPS", s.FilterHttps ? "filtered" : "not filtered");
         Line("Element hiding", s.CosmeticFiltering ? "on" : "off");
         Line("Pop-ups", s.BlockPopups ? "blocked" : "allowed");
+        Line("SafeSearch", s.AdultFilter ? (s.ForceSafeSearch ? "kept on" : "left alone") : "n/a (adult filter is off)");
         Line("Auto update", s.AutoUpdate ? $"every {s.UpdateIntervalHours} h" : "off");
         Line("App updates", s.AutoAppUpdate ? "checked automatically" : "manual only");
         Line("Excluded sites", s.ExcludedHosts.Count.ToString());

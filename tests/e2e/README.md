@@ -29,4 +29,19 @@ Useful variables: `E2E_CLI_DIR` (use an already built command-line app), `E2E_FI
 that already has the filters, instead of downloading them), `E2E_WORK` (keep the logs in this folder),
 `E2E_PROXY_PORT`, `E2E_SKIP_BROWSER_INSTALL=1`.
 
+## The adult-content filter
+
+`adult.sh` is a second, smaller test with the same needs (`NEAT_ADBLOCK_SO`, root, .NET, Node, `openssl`, `curl`; the same
+variables work). It points `adult.test www.google.com www.bing.com duckduckgo.com www.youtube.com ok.test` to 127.0.0.1 for
+the time it runs, starts the real proxy five times with different settings and checks, with curl, that
+
+* an adult site (https and plain http, and its subdomains) gets the block page, an ordinary site is not touched;
+* Google, Bing, DuckDuckGo get their safe-search parameter and YouTube gets `YouTube-Restrict: Moderate`;
+* with SafeSearch off, with the filter off, and for an excluded site nothing is changed or blocked;
+* with HTTPS filtering off the connection to an adult site is refused.
+
+```bash
+sudo -E env "PATH=$PATH" bash tests/e2e/adult.sh
+```
+
 The test does not touch the Windows proxy setting or any real site: everything stays on 127.0.0.1.

@@ -34,6 +34,8 @@ Trang chủ (công tắc lớn “Bảo vệ đang bật”, số liệu, nút *
 
 **Kiểm tra bảo vệ** hỏi như một trình duyệt sẽ hỏi, nhưng không cần trình duyệt: đã nạp bộ lọc chưa, proxy có trả lời không, một kết nối HTTPS qua Pluton Shield có mở được không (chứng minh Windows tin chứng chỉ Pluton Shield), luật có chặn các địa chỉ quảng cáo nổi tiếng không, Windows có đang gửi lưu lượng tới Pluton Shield không. Không gửi gì ra Internet. **Báo cáo chẩn đoán** (phiên bản, trạng thái, chứng chỉ, cài đặt, 40 dòng nhật ký cuối) không chứa mật khẩu, luật riêng hay danh sách loại trừ (chỉ số lượng); đính kèm khi báo lỗi.
 
+**Chặn nội dung người lớn** (trang Danh sách chặn, thẻ ở đầu trang; mặc định **tắt**): xem mục riêng bên dưới.
+
 **Ngôn ngữ:** tiếng Việt và tiếng Anh (Cài đặt → Ngôn ngữ; mặc định theo ngôn ngữ giao diện Windows: tiếng Việt thì dùng tiếng Việt, còn lại tiếng Anh). Đổi là có hiệu lực ngay, kể cả menu khay và các trang “Đã bị chặn / Đã chặn popup” do proxy trả về. Mọi chữ nằm ở `src/PlutonShield.App/Loc.cs` (khóa → (vi, en)); thêm ngôn ngữ mới = thêm một phần tử vào mỗi dòng. Thông báo lỗi từ `PlutonShield.Core` (ví dụ lỗi chứng chỉ) vẫn là tiếng Anh.
 
 **Bộ lọc của tôi** dùng cú pháp Adblock Plus / uBlock Origin, mỗi dòng một luật, `!` là ghi chú, dòng sai bị bỏ qua (không báo lỗi):
@@ -45,6 +47,22 @@ example.com##div:has-text(Sponsored)    ẩn khối chứa chữ “Sponsored”
 @@||example.org^$document               không lọc trang này
 ```
 
+## Chặn nội dung người lớn
+
+Công tắc “Chặn nội dung người lớn” (`AppSettings.AdultFilter`, mặc định tắt, **không có mật khẩu**) và công tắc con “Giữ SafeSearch luôn bật” (`ForceSafeSearch`, mặc định bật, chỉ có tác dụng khi công tắc chính bật). Chỉ có **một** danh sách: HaGeZi NSFW.
+
+**Danh sách đi theo gói tùy chọn của neat-filters, không nằm trong `manifest.json`.** Nếu thêm vào manifest thì mọi bản app cũ sẽ tự bật nó (app cũ bật mọi danh sách trong manifest). Mỗi bản phát hành neat-filters có thêm `optional.json` (`schema` 1, `packs[]` gồm `id` `adult`, `kind` `domains`, `file` `optional-adult.txt`, `sha256`, `size`, `domains`, `source`, `license`) và tệp `optional-adult.txt` (tên miền viết thường, mỗi dòng một tên, đã sắp xếp). Dựng bằng `scripts/optional.mjs` trong `neat-filters` (nếu nguồn lỗi hoặc co lại hơn một nửa thì giữ bản cũ). Bản phát hành chưa có `optional.json` thì công tắc báo “chưa lấy được danh sách”, app thử lại mỗi 10 phút và **không chặn gì**.
+
+**Phía app** (`PlutonShield.Core/Adult`, `Proxy/SafeSearch.cs`):
+
+- `AdultBlocklist` tải danh sách **chỉ khi công tắc bật** (https, `optional.json` → kiểm tra id/kind/tên tệp an toàn/sha256/kích thước ≤ 30 MB/số tên miền → tải có kiểm tra sha256 vào tệp tạm → đổi tên nguyên tử → ghi `adult.json`). Tệp lưu ở `%LOCALAPPDATA%\PlutonShield\adult`, nạp lại khi khởi động sau khi kiểm tra lại sha256 (tệp bị sửa thì bị từ chối và tải lại). Tắt công tắc thì giải phóng bộ nhớ, giữ tệp. Cập nhật lỗi thì danh sách đang dùng vẫn chạy (cửa sổ hiện “lần cập nhật gần nhất lỗi”).
+- Khớp **trong app**, không đưa vào engine Rust: một `HashSet`, đi từ tên miền lên cha (`a.b.example` → `b.example`, không bao giờ khớp riêng đuôi `.com`), bỏ qua địa chỉ IP. Nhờ vậy phân biệt được “nội dung người lớn” với quảng cáo (trang riêng, đúng lời) và không phải nạp lại engine.
+- `ProxyService`: yêu cầu tới tên miền trong danh sách (và không nằm trong “Sites that are never filtered”) bị trả `403` + `PageText.AdultBlockedPage` (chỉ hiện **tên miền**, không hiện cả địa chỉ), loại khác (ảnh, script…) trả phản hồi trống như mọi yêu cầu bị chặn. Việc này làm **trước** engine nên chạy cả khi engine chưa nạp. HTTPS cần giải mã để trả trang; nếu không giải mã được (tắt “lọc HTTPS”), `OnTunnelConnect` đặt `DenyConnect` và trình duyệt báo lỗi kết nối.
+- **SafeSearch** viết lại yêu cầu (chỉ khi giải mã được HTTPS, hoặc HTTP thường): Google `safe=active` trên `/search` (mọi tên miền `google.xx`), Bing `adlt=strict` trên `/search`, `/images/search`, `/videos/search`, `/news/search`, DuckDuckGo `kp=1` (khi có `q`), YouTube thêm header `YouTube-Restrict: Moderate`. Tham số cũ (`safe=off`, bản trùng) bị thay, tham số khác giữ nguyên. Đây là cách “best effort”: nó phụ thuộc cách từng máy tìm kiếm hiểu các tham số này.
+- `ShieldRuntime.ApplyAdultSetting` bật/tắt theo cài đặt (chống lật liên tục), cập nhật cùng lúc với bộ lọc và thử lại mỗi 10 phút khi chưa có danh sách; chẩn đoán có dòng “Adult filter” và “SafeSearch”.
+
+**Giới hạn:** dựa trên danh sách (trang mới/không có trong danh sách lọt qua); VPN, Tor, trình duyệt cấu hình bỏ qua proxy Windows, hoặc tài khoản Windows khác không bị chặn (proxy đặt theo từng người dùng); thống kê vẫn ghi tên miền bị chặn (chỉ trên máy); SafeSearch chỉ áp dụng cho các địa chỉ liệt kê ở trên (không phải mọi cách truy cập Google/YouTube, ví dụ ứng dụng không đi qua proxy).
+
 ## Cấu trúc
 
 | Thư mục | Nội dung |
@@ -54,6 +72,7 @@ example.com##div:has-text(Sponsored)    ẩn khối chứa chữ “Sponsored”
 | `src/PlutonShield.Cli` | `plutonshield run | status | update | check <url> | trust-ca | untrust-ca | reset-proxy`. |
 | `tests/PlutonShield.Core.Tests` | Bộ kiểm thử dạng console (không cần framework): `dotnet run --project tests/PlutonShield.Core.Tests`. |
 | `tests/e2e` | Kiểm thử đầu-cuối trên Linux: proxy thật + Chromium thật + site thử cục bộ (`bash tests/e2e/run.sh`, xem README trong thư mục). Có workflow chạy tay `e2e (manual)` trên GitHub (chưa chạy lần nào). |
+| `tests/e2e/adult.sh` | Kiểm thử đầu-cuối bộ lọc người lớn bằng proxy thật + curl: trang chặn (https/http/tên miền con), SafeSearch Google/Bing/DuckDuckGo/YouTube, tắt SafeSearch, tắt bộ lọc, tắt lọc HTTPS, tên miền loại trừ (`sudo -E env "PATH=$PATH" bash tests/e2e/adult.sh`). Cũng chạy trong workflow `e2e (manual)`. |
 | `tests/js` | Kiểm thử `runtime.js` (script chạy trong trang) bằng jsdom: `cd tests/js && npm install && npm test`. |
 | `tools/` | `fetch-native.ps1`, `fetch-filters.ps1`, `build.ps1`. |
 
@@ -147,7 +166,10 @@ git push origin v0.3.0                     # đẩy tag => workflow "release" ch
 | Bộ lọc tùy chọn (`ComposedRelease`, nạp lại engine, luật tùy chọn chặn/ẩn thật qua engine) | `tests/PlutonShield.Core.Tests` + chạy với engine thật |
 | Văn bản vi/en (khóa đủ hai ngôn ngữ, tham số `{n}` khớp nhau, đổi ngôn ngữ, trang chặn/popup) | `tests/PlutonShield.Core.Tests` |
 | Tự cập nhật: so phiên bản (rc, số, `+build`), đọc trả lời của GitHub (nháp/pre-release/thiếu tệp/địa chỉ lạ/kích thước), tải + kiểm tra SHA-256 (hỏng, cụt, dài quá, `.sha256` sai), `AppUpdateService` (trạng thái, lỗi, lịch, dọn tệp cũ), mọi khóa chữ dùng trong cửa sổ đều có vi và en | `tests/PlutonShield.Core.Tests` (`UpdateTests.cs`) với máy chủ giả; **chưa thử với GitHub thật** |
+| Chặn nội dung người lớn: đọc/lọc danh sách (bình luận, đuôi `.com`, ký tự lạ, trùng), khớp tên miền cha, tải + kiểm tra (`optional.json` sai schema/id/kind, tên tệp không an toàn, sha256 sai, size sai, quá lớn, danh sách rỗng, địa chỉ không phải https, 404/500, hủy), tệp lưu bị sửa, giữ danh sách cũ khi cập nhật lỗi, `SafeSearch.For` (Google nhiều đuôi, Bing, DuckDuckGo, YouTube, tên miền giả), trang chặn, giá trị mặc định cài đặt | `tests/PlutonShield.Core.Tests` (`AdultTests.cs`) với máy chủ giả |
+| Bật/tắt công tắc khi app đang chạy (`ShieldRuntime`): nạp bản đã lưu, báo lỗi cập nhật mà vẫn chặn, tắt thì giải phóng, bật/tắt liên tục 20 lần vẫn kết thúc đúng | chạy tay trên Linux với `ShieldRuntime` thật (chưa thành test trong repo) |
+| Chặn người lớn + SafeSearch qua proxy thật: trang chặn (https, http, tên miền con), ảnh trả rỗng, SafeSearch của Google/Bing/DuckDuckGo/YouTube, tắt SafeSearch, tắt bộ lọc, tắt lọc HTTPS (từ chối kết nối), tên miền loại trừ; xem trang chặn trong Chromium (vi) và nút “Quay lại” | `tests/e2e/adult.sh` — 20 kiểm tra đạt; **chưa thử với danh sách HaGeZi thật tải từ một bản phát hành neat-filters** (chưa có bản nào chứa `optional.json`) |
 | `ProxyService`, `CertificateService`, `ShieldRuntime`, CLI (Titanium 8.0.2 biên dịch từ mã nguồn, BouncyCastle từ mã nguồn) | `tests/e2e` + chạy tay trên Linux: HTTP/HTTPS giải mã, chứng chỉ upstream tự ký bị từ chối (502), chặn host, trang chặn, WebSocket, SSE, POST 5 MB, tải 300 MB (~500 MB/s, RAM không tăng), 200 yêu cầu song song, `selftest` |
 | Chromium thật qua proxy: ẩn phần tử, `:has-text`, ẩn theo class/id qua `plutonshield.invalid`, CSP (header, thiếu connect-src, thẻ meta), nén, popup | `tests/e2e/check.js` — 45 kiểm tra đều đạt |
-| `SystemProxy` (registry), `StartupRegistration`, DPAPI, cài chứng chỉ vào kho Windows, WinUI App (gồm các trang mới, chuông cập nhật và trang cập nhật, `L.cs`, đổi ngôn ngữ tại chỗ, nút kiểm tra, ô thử địa chỉ), khay, chạy bộ cài im lặng và tự mở lại (`/RELAUNCH=1`) | **Chưa biên dịch, chưa chạy** (cần Windows) |
+| `SystemProxy` (registry), `StartupRegistration`, DPAPI, cài chứng chỉ vào kho Windows, WinUI App (gồm các trang mới, thẻ “Chặn nội dung người lớn”, chuông cập nhật và trang cập nhật, `L.cs`, đổi ngôn ngữ tại chỗ, nút kiểm tra, ô thử địa chỉ), khay, chạy bộ cài im lặng và tự mở lại (`/RELAUNCH=1`) | **Chưa biên dịch, chưa chạy** (cần Windows) |
 | Firefox, Edge/Chrome trên Windows | **Chưa thử** (Chromium trên Linux đã thử) |

@@ -42,6 +42,9 @@ public sealed class AppPaths
     /// <summary>Installers of new app versions, between the download and the install (created when needed).</summary>
     public string UpdatesDir => Path.Combine(Root, "updates");
 
+    /// <summary>The list of the adult-content filter (adult.json and the domain list), created when it is first switched on.</summary>
+    public string AdultDir => Path.Combine(Root, "adult");
+
     public string CertDir => Path.Combine(Root, "cert");
 
     public string LogDir => Path.Combine(Root, "logs");

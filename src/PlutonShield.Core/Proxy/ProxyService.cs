@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Neat.Adblock;
+using PlutonShield.Core.Adult;
 using PlutonShield.Core.Engine;
 using PlutonShield.Core.Logging;
 using PlutonShield.Core.Security;
@@ -30,6 +31,7 @@ public sealed class ProxyService : IDisposable
     private readonly SettingsStore _settings;
     private readonly EngineHost _engine;
     private readonly StatsCollector _stats;
+    private readonly AdultBlocklist? _adult;
     private readonly ProxyServer _server;
     private readonly object _gate = new();
     private ExplicitProxyEndPoint? _endpoint;
@@ -38,11 +40,13 @@ public sealed class ProxyService : IDisposable
     /// <summary>What we remember about a request until its response comes back.</summary>
     private sealed record PageRequest(string Url, string Source, string Type);
 
-    public ProxyService(SettingsStore settings, EngineHost engine, StatsCollector stats)
+    /// <param name="adult">The list of the adult-content filter; null when the app has none (tests).</param>
+    public ProxyService(SettingsStore settings, EngineHost engine, StatsCollector stats, AdultBlocklist? adult = null)
     {
         _settings = settings;
         _engine = engine;
         _stats = stats;
+        _adult = adult;
         // We install and remove trust ourselves (CertificateService), so Titanium must not do it on its own.
         _server = new ProxyServer(userTrustRootCertificate: false, machineTrustRootCertificate: false, trustRootCertificateAsAdmin: false);
         _server.BeforeRequest += OnBeforeRequest;
@@ -159,8 +163,22 @@ public sealed class ProxyService : IDisposable
                        && s.FilterHttps
                        && !MitmExclusionDefaults.IsBuiltInSslBypass(host)
                        && HostRules.ShouldDecrypt(host, s.ExcludedHosts);
+
+        // An adult site has to be opened up to be answered with our page. When that is not possible (HTTPS filtering is
+        // off), the connection is refused instead of letting the site through.
+        if (!e.DecryptSsl && IsAdultBlocked(s, host))
+        {
+            e.DenyConnect = true;
+            _stats.OnBlocked(host, "document");
+        }
+
         return Task.CompletedTask;
     }
+
+    /// <summary>True when the adult-content filter is on and blocks this host (unless the person excluded the site).</summary>
+    private bool IsAdultBlocked(AppSettings s, string host) =>
+        s.ProtectionEnabled && s.AdultFilter && _adult is not null
+        && _adult.IsBlocked(host) && !HostRules.IsExcluded(host, s.ExcludedHosts);
 
     // ---- Requests ----
 
@@ -246,8 +264,8 @@ public sealed class ProxyService : IDisposable
         var request = e.HttpClient.Request;
         _stats.OnRequest();
 
-        var engine = _engine.Current;
-        if (engine is null || !_settings.Current.ProtectionEnabled) return;
+        var settings = _settings.Current;
+        if (!settings.ProtectionEnabled) return;
 
         var url = request.Url;
         if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
@@ -258,11 +276,26 @@ public sealed class ProxyService : IDisposable
 
         string? Header(string name) => request.Headers.GetFirstHeader(name)?.Value;
         var type = RequestClassifier.Classify(url, Header);
-        var source = RequestClassifier.SourceUrl(url, type, Header);
         var host = HostRules.HostOf(url);
+
+        // Adult content comes first and does not depend on the filter engine.
+        if (IsAdultBlocked(settings, host))
+        {
+            _stats.OnBlocked(host, type);
+            RespondBlocked(e, type, url, settings.EffectiveLanguage, adult: true);
+            return;
+        }
+
+        var engine = _engine.Current;
+        if (engine is null)
+        {
+            ApplySafeSearch(request, url, settings);
+            return;
+        }
+
+        var source = RequestClassifier.SourceUrl(url, type, Header);
         var isPage = type is "document" or "subdocument";
 
-        var settings = _settings.Current;
         if (type == "document" && settings.BlockPopups
             && PopupDetector.TryGetOpener(url, request.Method, Header, out var opener)
             && !HostRules.IsExcluded(host, settings.ExcludedHosts)
@@ -307,6 +340,7 @@ public sealed class ProxyService : IDisposable
                 return;
         }
 
+        var current = url; // the address after our own changes, for what comes next
         if (result.RewrittenUrl is { Length: > 0 } rewritten && Uri.TryCreate(rewritten, UriKind.Absolute, out var newUri)
             && Uri.TryCreate(url, UriKind.Absolute, out var oldUri)
             && string.Equals(newUri.Host, oldUri.Host, StringComparison.OrdinalIgnoreCase))
@@ -317,7 +351,10 @@ public sealed class ProxyService : IDisposable
                 ? rewritten
                 : newUri.PathAndQuery;
             _stats.OnRewritten();
+            current = rewritten;
         }
+
+        ApplySafeSearch(request, current, settings);
 
         if (isPage)
         {
@@ -325,13 +362,38 @@ public sealed class ProxyService : IDisposable
         }
     }
 
-    private static void RespondBlocked(SessionEventArgs e, string type, string url, string language)
+    /// <summary>
+    /// Keeps SafeSearch on (a query parameter, or a header for YouTube) while the adult-content filter and its SafeSearch
+    /// option are both on. <paramref name="url"/> is the address as it is now, so that an earlier change is not undone.
+    /// </summary>
+    private void ApplySafeSearch(Request request, string url, AppSettings settings)
+    {
+        if (!settings.AdultFilter || !settings.ForceSafeSearch) return;
+        if (SafeSearch.For(url) is not { } change) return;
+
+        if (change.NewUrl is { } newUrl && Uri.TryCreate(newUrl, UriKind.Absolute, out var parsed))
+        {
+            // Same form as the request line it replaces: "/path?x" inside a decrypted tunnel, the whole address for plain http.
+            request.RequestUriString = request.RequestUriString.StartsWith("http", StringComparison.OrdinalIgnoreCase)
+                ? newUrl
+                : parsed.PathAndQuery;
+        }
+
+        if (change.HeaderName is { } name && change.HeaderValue is { } value)
+        {
+            request.Headers.RemoveHeader(name);
+            request.Headers.AddHeader(name, value);
+        }
+    }
+
+    private static void RespondBlocked(SessionEventArgs e, string type, string url, string language, bool adult = false)
     {
         var noStore = new HttpHeader("Cache-Control", "no-store");
         switch (type)
         {
             case "document":
-                e.GenericResponse(Encoding.UTF8.GetBytes(PageText.BlockedPage(url, language)), HttpStatusCode.Forbidden, new[]
+                var page = adult ? PageText.AdultBlockedPage(url, language) : PageText.BlockedPage(url, language);
+                e.GenericResponse(Encoding.UTF8.GetBytes(page), HttpStatusCode.Forbidden, new[]
                 {
                     new HttpHeader("Content-Type", "text/html; charset=utf-8"),
                     noStore,

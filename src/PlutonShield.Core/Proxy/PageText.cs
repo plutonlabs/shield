@@ -27,6 +27,24 @@ public static class PageText
                    : "If you trust this site, add its host to the exclusions in PlutonShield settings.") + "</p></main></body></html>";
     }
 
+    /// <summary>The page for a website blocked by the adult-content filter. It names only the site, not the whole address.</summary>
+    public static string AdultBlockedPage(string url, string language)
+    {
+        var vi = language == "vi";
+        var host = HostRules.HostOf(url);
+        return "<!doctype html><html lang=\"" + (vi ? "vi" : "en") + "\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+               + "<title>" + (vi ? "Đã bị PlutonShield chặn" : "Blocked by PlutonShield") + "</title><style>" + Style + "</style></head><body><main>"
+               + "<h1>" + (vi ? "Trang web nội dung người lớn đã bị chặn" : "Adult website blocked") + "</h1>"
+               + "<p>" + (vi
+                   ? "PlutonShield đã chặn trang web này vì nó nằm trong danh sách nội dung người lớn."
+                   : "PlutonShield blocked this website because it is on the adult-content list.") + "</p>"
+               + "<p><code>" + Short(host.Length > 0 ? host : url) + "</code></p>"
+               + "<p>" + (vi
+                   ? "Bộ lọc này có thể tắt trong PlutonShield, mục Danh sách chặn (Filter lists)."
+                   : "You can switch this filter off in PlutonShield, under Filter lists.") + "</p>"
+               + "<p><a href=\"javascript:history.back()\">" + (vi ? "Quay lại" : "Go back") + "</a></p></main></body></html>";
+    }
+
     public static string PopupPage(string url, string language)
     {
         var vi = language == "vi";

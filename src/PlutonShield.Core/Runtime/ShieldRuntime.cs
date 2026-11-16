@@ -1,3 +1,4 @@
+using PlutonShield.Core.Adult;
 using PlutonShield.Core.Engine;
 using PlutonShield.Core.Filters;
 using PlutonShield.Core.Logging;
@@ -21,7 +22,11 @@ public sealed class ShieldRuntime : IDisposable
     private readonly HttpClient _http;
     private readonly SemaphoreSlim _toggle = new(1, 1);
     private readonly SemaphoreSlim _update = new(1, 1);
+    private readonly SemaphoreSlim _adultUpdate = new(1, 1);
+    private readonly object _adultLock = new();
     private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _adultCts;
+    private bool _adultOn;
     private Task? _background;
     private bool _disposed;
 
@@ -37,7 +42,8 @@ public sealed class ShieldRuntime : IDisposable
         {
             Disabled = Environment.GetEnvironmentVariable("PLUTONSHIELD_NO_SYSTEM_PROXY") == "1",
         };
-        Proxy = new ProxyService(Settings, Engine, Stats);
+        Adult = new AdultBlocklist(Paths.AdultDir);
+        Proxy = new ProxyService(Settings, Engine, Stats, Adult);
         Certificate = new CertificateService(Paths, Settings, Proxy.CertificateManager);
 
         // Updates must not go through our own proxy.
@@ -63,6 +69,9 @@ public sealed class ShieldRuntime : IDisposable
     public StatsCollector Stats { get; }
     public SystemProxy SystemProxy { get; }
     public ProxyService Proxy { get; }
+
+    /// <summary>The adult-content list: empty while the filter is off, downloaded the first time it is switched on.</summary>
+    public AdultBlocklist Adult { get; }
     public CertificateService Certificate { get; }
     public FilterUpdater Updater { get; }
 
@@ -92,6 +101,9 @@ public sealed class ShieldRuntime : IDisposable
         }
 
         await LoadBestEngineAsync();
+
+        // The saved adult list is read before protection comes on, so the first requests are already covered.
+        ApplyAdultSetting();
 
         if (Settings.Current.ProtectionEnabled)
         {
@@ -174,6 +186,8 @@ public sealed class ShieldRuntime : IDisposable
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
+        ApplyAdultSetting();
+
         // The user's own rules or the choice of lists changed: build the engine again (in the background; the old one
         // keeps working). A short wait first, so that several switches flipped in a row cost one load.
         var rulesChanged = !string.Equals(Engine.LoadedCustomRules, Settings.Current.CustomFilters, StringComparison.Ordinal);
@@ -201,6 +215,75 @@ public sealed class ShieldRuntime : IDisposable
                 Settings.Update(x => x.ProtectionEnabled = true);
                 await SetProtectionAsync(true);
             });
+        }
+    }
+
+    // ---- adult-content filter ----
+
+    /// <summary>Starts or stops the adult-content list to match the setting. Does nothing when it already matches.</summary>
+    private void ApplyAdultSetting()
+    {
+        CancellationToken token;
+        lock (_adultLock)
+        {
+            if (_disposed) return;
+            var want = Settings.Current.AdultFilter;
+            if (want == _adultOn) return;
+            _adultOn = want;
+
+            _adultCts?.Cancel();
+            _adultCts?.Dispose();
+            _adultCts = null;
+            if (!want)
+            {
+                Adult.Unload(); // the list is freed; the file stays for the next time
+                return;
+            }
+
+            _adultCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+            token = _adultCts.Token;
+        }
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                Adult.LoadFromDisk(); // the saved copy is in use at once, then it is brought up to date
+                await RefreshAdultAsync(token);
+            }
+            catch (OperationCanceledException)
+            {
+                // switched off again, or closing
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"adult list: {ex}");
+            }
+            finally
+            {
+                if (token.IsCancellationRequested && !Settings.Current.AdultFilter) Adult.Unload();
+            }
+        });
+    }
+
+    /// <summary>Checks neat-filters for a newer adult list now (also what "Try again" does). Does nothing while the filter is off.</summary>
+    public async Task UpdateAdultNowAsync(CancellationToken ct = default)
+    {
+        if (!Settings.Current.AdultFilter) return;
+        await RefreshAdultAsync(ct);
+    }
+
+    private async Task RefreshAdultAsync(CancellationToken ct)
+    {
+        await _adultUpdate.WaitAsync(ct);
+        try
+        {
+            if (!Settings.Current.AdultFilter) return;
+            await Adult.UpdateAsync(_http, Settings.Current.FiltersBaseUrl, ct);
+        }
+        finally
+        {
+            _adultUpdate.Release();
         }
     }
 
@@ -252,6 +335,13 @@ public sealed class ShieldRuntime : IDisposable
                 await Engine.LoadAsync(dir, ct);
             }
 
+            // The adult list comes from the same release; it follows the filters (a failure there never fails this update).
+            if (Settings.Current.AdultFilter)
+            {
+                try { await RefreshAdultAsync(ct); }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested) { /* the filter was switched off meanwhile */ }
+            }
+
             return result;
         }
         catch (OperationCanceledException)
@@ -287,6 +377,14 @@ public sealed class ShieldRuntime : IDisposable
                 if (s.AutoUpdate && due)
                 {
                     await UpdateFiltersAsync(ct);
+                }
+
+                // No adult list yet (offline, or the release has none): look again every 10 minutes.
+                if (s.AdultFilter && Adult.State == AdultListState.Missing
+                    && (Adult.LastAttempt is null || DateTime.Now - Adult.LastAttempt >= TimeSpan.FromMinutes(10)))
+                {
+                    try { await RefreshAdultAsync(ct); }
+                    catch (OperationCanceledException) when (!ct.IsCancellationRequested) { /* switched off meanwhile */ }
                 }
 
                 if (DateTime.UtcNow - lastFlush > TimeSpan.FromMinutes(1))
@@ -374,6 +472,12 @@ public sealed class ShieldRuntime : IDisposable
         AppDomain.CurrentDomain.ProcessExit -= OnProcessExit;
         Proxy.Dispose();
         Engine.Dispose();
+        lock (_adultLock)
+        {
+            _adultCts?.Dispose();
+            _adultCts = null;
+        }
+
         _http.Dispose();
         _cts.Dispose();
     }

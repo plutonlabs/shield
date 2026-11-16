@@ -22,6 +22,24 @@
                     Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
                     BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
                 <StackPanel Spacing="8">
+                    <ToggleSwitch x:Name="AdultToggle" loc:L.Header="adult.title" Toggled="AdultToggle_Toggled" />
+                    <TextBlock loc:L.Key="adult.intro" Style="{StaticResource SecondaryText}" />
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <ProgressRing x:Name="AdultRing" IsActive="False" Width="16" Height="16" />
+                        <TextBlock x:Name="AdultStatus" Style="{StaticResource SecondaryText}" VerticalAlignment="Center" />
+                        <HyperlinkButton x:Name="AdultRetry" loc:L.Key="adult.retry" Click="AdultRetry_Click" Visibility="Collapsed" />
+                    </StackPanel>
+                    <ToggleSwitch x:Name="SafeSearchToggle" loc:L.Header="adult.safesearch" Toggled="SafeSearchToggle_Toggled" Margin="0,8,0,0" />
+                    <TextBlock loc:L.Key="adult.safesearch.hint" Style="{StaticResource SecondaryText}" />
+                    <InfoBar x:Name="AdultBar" IsOpen="False" IsClosable="False" Severity="Warning" />
+                    <TextBlock loc:L.Key="adult.limits" Style="{StaticResource SecondaryText}" />
+                </StackPanel>
+            </Border>
+
+            <Border Padding="20" CornerRadius="8"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
+                <StackPanel Spacing="8">
                     <TextBlock x:Name="SummaryText" Style="{StaticResource SubtitleTextBlockStyle}" />
                     <TextBlock x:Name="RulesText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     <StackPanel Orientation="Horizontal" Spacing="8">

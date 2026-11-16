@@ -2,6 +2,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using PlutonShield.Core.Adult;
 using PlutonShield.Core.Filters;
 using PlutonShield.Core.Runtime;
 
@@ -20,6 +21,7 @@ public sealed partial class FilterListsPage : Page
     private readonly List<Action> _headerRefreshers = new();
     private FilterManifest? _manifest;
     private bool _suppress; // true while switches are set by the code (a group at once): they must not save one by one
+    private bool _adultLoading; // true while the adult-content switches are set from the settings: that must not save anything
 
     public FilterListsPage()
     {
@@ -33,15 +35,20 @@ public sealed partial class FilterListsPage : Page
     {
         Rt.Engine.EngineChanged += OnEngineChanged;
         Rt.Settings.Changed += OnSettingsChanged;
+        Rt.Adult.Changed += OnAdultChanged;
+        Rt.Changed += OnRuntimeChanged;
         _manifest = LoadManifest();
         Build();
         UpdateSummary();
+        RefreshAdult();
     }
 
     private void Page_Unloaded(object sender, RoutedEventArgs e)
     {
         Rt.Engine.EngineChanged -= OnEngineChanged;
         Rt.Settings.Changed -= OnSettingsChanged;
+        Rt.Adult.Changed -= OnAdultChanged;
+        Rt.Changed -= OnRuntimeChanged;
     }
 
     private static FilterManifest? LoadManifest()
@@ -51,7 +58,15 @@ public sealed partial class FilterListsPage : Page
     }
 
     // Both events may come from a background thread.
-    private void OnSettingsChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(UpdateSummary);
+    private void OnSettingsChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(() =>
+    {
+        UpdateSummary();
+        RefreshAdult();
+    });
+
+    private void OnAdultChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(RefreshAdult);
+
+    private void OnRuntimeChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(RefreshAdult);
 
     private void OnEngineChanged(object? sender, EventArgs e) => DispatcherQueue.TryEnqueue(() =>
     {
@@ -73,6 +88,92 @@ public sealed partial class FilterListsPage : Page
         Rt.Settings.Update(s => s.DisabledLists = new List<string>());
         Build();
         UpdateSummary();
+    }
+
+    // ---- adult content ----
+
+    /// <summary>Shows the adult-content switches and what the list is doing, from the settings and the list itself.</summary>
+    private void RefreshAdult()
+    {
+        var s = Rt.Settings.Current;
+        _adultLoading = true;
+        try
+        {
+            AdultToggle.IsOn = s.AdultFilter;
+            SafeSearchToggle.IsOn = s.ForceSafeSearch;
+            SafeSearchToggle.IsEnabled = s.AdultFilter;
+        }
+        finally
+        {
+            _adultLoading = false;
+        }
+
+        var list = Rt.Adult;
+        var busy = false;
+        var failed = false;
+        var text = "";
+        if (s.AdultFilter)
+        {
+            switch (list.State)
+            {
+                case AdultListState.Ready when list.Error is { Length: > 0 } error:
+                    text = Loc.T("adult.status.stale", list.DomainCount.ToString("N0", Loc.Culture), error);
+                    break;
+                case AdultListState.Ready:
+                    text = Loc.T("adult.status.ready", list.DomainCount.ToString("N0", Loc.Culture), list.Version ?? "-");
+                    break;
+                case AdultListState.Missing when list.Error is { Length: > 0 } error:
+                    text = Loc.T("adult.status.failed", error);
+                    failed = true;
+                    break;
+                default: // switched on a moment ago, or being downloaded
+                    text = Loc.T("adult.status.downloading");
+                    busy = true;
+                    break;
+            }
+        }
+
+        AdultRing.IsActive = busy;
+        AdultStatus.Text = text;
+        AdultStatus.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AdultRetry.Visibility = failed ? Visibility.Visible : Visibility.Collapsed;
+
+        string? warning = null;
+        if (s.AdultFilter)
+        {
+            if (Rt.State != ProtectionState.On) warning = Loc.T("adult.noprotection");
+            else if (!s.FilterHttps) warning = Loc.T("adult.needhttps");
+        }
+
+        AdultBar.Message = warning ?? "";
+        AdultBar.IsOpen = warning is not null;
+    }
+
+    private void AdultToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_adultLoading) return;
+        var on = AdultToggle.IsOn;
+        Rt.Settings.Update(s => s.AdultFilter = on); // the runtime starts or stops the list on this change
+        RefreshAdult();
+    }
+
+    private void SafeSearchToggle_Toggled(object sender, RoutedEventArgs e)
+    {
+        if (_adultLoading) return;
+        var on = SafeSearchToggle.IsOn;
+        Rt.Settings.Update(s => s.ForceSafeSearch = on);
+    }
+
+    private async void AdultRetry_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            await Rt.UpdateAdultNowAsync();
+        }
+        catch (Exception)
+        {
+            // the list reports its own errors
+        }
     }
 
     // ---- what is shown ----

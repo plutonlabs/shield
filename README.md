@@ -16,6 +16,7 @@ Pluton Shield is a free ad blocker for Windows 10 and 11 in the spirit of AdGuar
 - **Hides leftover ad boxes**: empty frames, sponsored blocks and banners that normal blocking leaves behind.
 - **Stops advertising pop-up windows.**
 - **Removes tracking tags** from web addresses.
+- **Can block adult websites** (off by default) and keep SafeSearch on in Google, Bing, DuckDuckGo and YouTube.
 - **Lets you choose**: turn individual filter lists on or off, write your own rules, and exclude sites you never want filtered.
 - **Updates itself.** Filters refresh every few hours, and the app tells you when a new version of Pluton Shield is ready.
 - **Runs quietly** in the system tray and can start with Windows.
@@ -39,7 +40,7 @@ Windows 10 (version 1809 or later) and Windows 11 are supported. You don't need 
 |---|---|
 | **Home** | Turn protection on or off, see how much has been blocked, and press **Test protection** to check that everything works. |
 | **Filters** | See the filter version and update the filters right now. |
-| **Filter lists** | Turn individual lists on or off, search them, and switch whole groups (ads, privacy, security, annoyances, countries). |
+| **Filter lists** | Turn individual lists on or off, search them, switch whole groups (ads, privacy, security, annoyances, countries), and turn on the adult-content filter. |
 | **My filters** | Write your own rules, and try an address to see whether it would be blocked. |
 | **Statistics** | See the most blocked sites and recent activity. |
 | **Settings** | Language, start with Windows, pop-up blocking, sites that are never filtered, the certificate, updates, and troubleshooting tools. |
@@ -51,6 +52,16 @@ Closing the window keeps Pluton Shield running in the system tray. Right-click t
 When a new version of Pluton Shield is released, a **bell with the message "A new update is available."** appears above *Settings*. Click it to read what's new, then press **Update now**. The app downloads the installer, checks it, closes itself, updates and opens again. Nothing is installed until you press the button.
 
 You can also press **Check for updates** at the top of *Settings*, or turn off automatic checks there.
+
+### Blocking adult websites
+
+At the top of *Filter lists* there is a switch, **Block adult content**. It is **off** until you turn it on. When you do, Pluton Shield downloads one extra list (the [HaGeZi NSFW list](https://github.com/hagezi/dns-blocklists), tens of thousands of sites) and shows a page that says *"Adult website blocked"* instead of the site. Nothing is downloaded and nothing is blocked while the switch is off.
+
+- **Keep SafeSearch on** (also on by default once the filter is on) makes Google, Bing, DuckDuckGo and YouTube use their safe mode, so adult results are left out of the searches you do there. YouTube is set to "Moderate".
+- There is **no password**: anyone using the PC can switch it off again. If you want to stop someone else from doing that, this is not the tool for it.
+- It needs protection to be **on**, and **HTTPS filtering** (the default) for the explanation page and for SafeSearch. With HTTPS filtering off, the connection to an adult site is simply refused and the browser shows an error.
+- It is a list, so it is not perfect: new or unlisted sites get through, and it does not stop a VPN, Tor, or a browser set to ignore the Windows proxy. It covers the Windows account it is installed in.
+- A site you added to *Sites that are never filtered* is never blocked by this filter.
 
 ### Writing your own rules
 
@@ -75,7 +86,7 @@ Almost every website uses HTTPS, which is encrypted. To remove ads from an encry
 
 Pluton Shield has no accounts, no ads and no tracking of its own. It does not send your browsing history anywhere. Everything is filtered on your computer, and the statistics you see never leave it.
 
-The only connections the app makes itself are to GitHub: to download filter lists, and to check for a new version of Pluton Shield.
+The only connections the app makes itself are to GitHub: to download filter lists (and the adult-content list, only if you turn that on), and to check for a new version of Pluton Shield.
 
 ## Troubleshooting
 
@@ -105,6 +116,7 @@ Go to *Windows Settings → Apps → Installed apps*, find **Pluton Shield** and
 
 ## Good to know
 
+- **SafeSearch** is best effort: it works by asking each search engine for its safe mode, and a search engine can change how that works.
 - **Pop-up blocking** is best effort. It stops most advertising pop-ups, but not every one.
 - **Firefox** needs the extra certificate step described above. Chrome, Edge, Brave and Opera work with the Windows certificate.
 - If your network *requires* a company proxy, Pluton Shield's own updates may not be able to connect.
@@ -116,7 +128,7 @@ Go to *Windows Settings → Apps → Installed apps*, find **Pluton Shield** and
 Pluton Shield is made by [Pluton Labs](https://github.com/plutonlabs) and stands on these projects:
 
 - [**neat-adblock**](https://github.com/plutonlabs/neat-adblock), the filtering engine, built on Brave's adblock-rust.
-- [**neat-filters**](https://github.com/plutonlabs/neat-filters), the filter lists, collected from community projects and published automatically.
+- [**neat-filters**](https://github.com/plutonlabs/neat-filters), the filter lists, collected from community projects and published automatically. The adult-content list is HaGeZi's [NSFW list](https://github.com/hagezi/dns-blocklists) (GPL-3.0), passed on through neat-filters.
 - [**Titanium.Web.Proxy**](https://github.com/justcoding121/Titanium-Web-Proxy), the local proxy.
 
 Thanks to everyone who maintains the open filter lists. They do the hard part.
