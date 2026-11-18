@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end test of the adult-content filter on Linux: the real PlutonShield proxy, a local test origin, curl. See README.md.
+# End-to-end test of the adult-content filter (and of the per-program exceptions) on Linux: the real PlutonShield proxy, a local test origin, curl. See README.md.
 # It checks the block page, SafeSearch (Google, Bing, DuckDuckGo, YouTube) and the cases around them (filter off, SafeSearch
 # off, HTTPS filtering off, an excluded site). Nothing leaves 127.0.0.1.
 set -euo pipefail
@@ -56,7 +56,8 @@ echo "== start origin"
 (E2E_CERTS=$CERTS node "$HERE/adult-origin.js" > "$WORK/origin.log" 2>&1) & PIDS+=($!)
 sleep 1
 
-# The list the filter would have downloaded, saved the way the app saves it (so no network is needed).
+# The list the filter would have downloaded, saved the way the app saves it. FiltersBaseUrl points nowhere, so the app
+# cannot replace it with the real list from GitHub (it would, and adult.test is not in that one).
 LIST=$WORK/optional-adult.txt
 printf '# test list\nadult.test\nsome-adult.example\n' > "$LIST"
 SHA=$(sha256sum "$LIST" | cut -d' ' -f1 | tr a-f A-F)
@@ -70,7 +71,7 @@ scenario() {
   local d=$WORK/$name; mkdir -p "$d/adult"; ln -s "$WORK/base/filters" "$d/filters"
   cp "$LIST" "$d/adult/optional-adult.txt"
   printf '{"File":"optional-adult.txt","Sha256":"%s","Version":"e2e","Domains":2}' "$SHA" > "$d/adult/adult.json"
-  printf '{"Port":%s,"Language":"en","AutoUpdate":false,"AdultFilter":true,"ForceSafeSearch":true%s}' "$PORT" "${extra:+,$extra}" > "$d/settings.json"
+  printf '{"Port":%s,"Language":"en","AutoUpdate":false,"FiltersBaseUrl":"https://127.0.0.1:9/","AdultFilter":true,"ForceSafeSearch":true%s}' "$PORT" "${extra:+,$extra}" > "$d/settings.json"
   PLUTONSHIELD_DATA=$d "$NS" run --no-system-proxy > "$d/proxy.log" 2>&1 & PROXY=$!
   PIDS+=($PROXY)
   for _ in $(seq 1 60); do grep -q "Protection is ON" "$d/proxy.log" 2>/dev/null && break; sleep 0.5; done
@@ -124,6 +125,23 @@ stop
 
 scenario excluded '"ExcludedHosts":["adult.test"]'
 check "excluded site: the adult filter leaves it alone" "$(get https://adult.test:8443/)"                             '200 "url":"/" "restrict":null'
+stop
+
+# Per-program exceptions: the program here is curl (found by its process id, matched on its file name).
+# get_strict checks the certificate (no -k): a connection that was opened up by the proxy would carry the proxy's own
+# certificate and fail, one that went through untouched carries the origin's (signed by the test CA).
+get_strict() { curl -s -m 20 --cacert "$CERTS/testca.pem" --proxy "http://127.0.0.1:$PORT" -o "$WORK/body" -w '%{http_code}' -H 'Sec-Fetch-Mode: navigate' "$1" 2>/dev/null || true; }
+
+scenario program-left-alone '"SkippedApps":[{"Exe":"curl","Path":"/usr/bin/curl"}]'
+check "program left alone: an adult site is not blocked"         "$(get https://adult.test:8443/)"                    '200 "url":"/" "restrict":null'
+check "program left alone: plain http is not blocked either"     "$(get http://adult.test:8080/)"                     '200 "url":"/" "restrict":null'
+check "program left alone: no SafeSearch is added"               "$(get 'https://www.google.com:8443/search?q=cats')" '200 "url":"/search?q=cats" "restrict":null'
+check "program left alone: HTTPS is not opened (origin certificate arrives untouched)" "$(get_strict https://ok.test:8443/hello)" "200"
+stop
+
+scenario other-program-left-alone '"SkippedApps":[{"Exe":"wget","Path":"/usr/bin/wget"}]'
+check "another program left alone: curl is still blocked"        "$(get https://adult.test:8443/)"                    "403 Adult website blocked"
+check "another program left alone: HTTPS is still opened up (the origin certificate is not what arrives)" "$(get_strict https://ok.test:8443/hello | cut -c1-3)" "000"
 stop
 
 [ "$fail" = 0 ] && echo "ALL OK" || { echo "FAILED"; exit 1; }

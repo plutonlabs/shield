@@ -356,6 +356,7 @@ Eq(1, langChanged, "Loc.Changed only on a real change");
 
 fail += await UpdateTests.RunAsync();
 fail += await AdultTests.RunAsync();
+fail += AppRuleTests.Run();
 
 Console.WriteLine(fail==0?"ALL OK":$"{fail} FAILED");
 return fail;

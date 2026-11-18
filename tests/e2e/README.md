@@ -33,12 +33,15 @@ that already has the filters, instead of downloading them), `E2E_WORK` (keep the
 
 `adult.sh` is a second, smaller test with the same needs (`NEAT_ADBLOCK_SO`, root, .NET, Node, `openssl`, `curl`; the same
 variables work). It points `adult.test www.google.com www.bing.com duckduckgo.com www.youtube.com ok.test` to 127.0.0.1 for
-the time it runs, starts the real proxy five times with different settings and checks, with curl, that
+the time it runs, starts the real proxy several times with different settings and checks, with curl, that
 
 * an adult site (https and plain http, and its subdomains) gets the block page, an ordinary site is not touched;
 * Google, Bing, DuckDuckGo get their safe-search parameter and YouTube gets `YouTube-Restrict: Moderate`;
 * with SafeSearch off, with the filter off, and for an excluded site nothing is changed or blocked;
-* with HTTPS filtering off the connection to an adult site is refused.
+* with HTTPS filtering off the connection to an adult site is refused;
+* a program that is left alone (`SkippedApps`) is not touched: curl listed there gets the adult site, no safe-search
+  parameter and an HTTPS connection that is not opened (checked against the test CA, without `-k`), while another
+  program (wget) being listed changes nothing for curl.
 
 ```bash
 sudo -E env "PATH=$PATH" bash tests/e2e/adult.sh

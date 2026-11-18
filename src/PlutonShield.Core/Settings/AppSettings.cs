@@ -47,6 +47,12 @@ public sealed class AppSettings
     /// <summary>Hosts that are never decrypted or filtered. "example.com" also covers its subdomains; "*.example.com" is the same.</summary>
     public List<string> ExcludedHosts { get; set; } = new();
 
+    /// <summary>
+    /// Programs that are left alone: their connections pass through untouched (HTTPS is not opened, nothing is blocked,
+    /// SafeSearch is not applied). Every other program is filtered as before.
+    /// </summary>
+    public List<SkippedApp> SkippedApps { get; set; } = new();
+
     /// <summary>The user's own filter rules (Adblock Plus / uBlock Origin syntax), one per line.</summary>
     public string CustomFilters { get; set; } = "";
 
@@ -105,6 +111,16 @@ public sealed class AppSettings
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Order(StringComparer.OrdinalIgnoreCase)
             .Take(1000)
+            .ToList();
+
+        SkippedApps = (SkippedApps ?? new List<SkippedApp>())
+            .Where(a => a is not null)
+            .Select(a => new SkippedApp { Exe = (a.Exe ?? "").Trim().ToLowerInvariant(), Path = (a.Path ?? "").Trim() })
+            .Where(a => Proxy.ClientApp.IsValidExe(a.Exe))
+            .Select(a => { if (a.Path.Length > 520 || a.Path.Any(char.IsControl)) a.Path = ""; return a; })
+            .DistinctBy(a => a.Exe)
+            .OrderBy(a => a.Exe, StringComparer.Ordinal)
+            .Take(500)
             .ToList();
 
         ExcludedHosts = (ExcludedHosts ?? new List<string>())

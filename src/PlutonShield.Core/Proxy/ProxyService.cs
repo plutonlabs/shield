@@ -32,6 +32,8 @@ public sealed class ProxyService : IDisposable
     private readonly EngineHost _engine;
     private readonly StatsCollector _stats;
     private readonly AdultBlocklist? _adult;
+    private readonly ClientAppResolver _resolver;
+    private int _lookupWarned; // 1 after the first failed lookup of a program has been logged (it would be every connection otherwise)
     private readonly ProxyServer _server;
     private readonly object _gate = new();
     private ExplicitProxyEndPoint? _endpoint;
@@ -41,8 +43,10 @@ public sealed class ProxyService : IDisposable
     private sealed record PageRequest(string Url, string Source, string Type);
 
     /// <param name="adult">The list of the adult-content filter; null when the app has none (tests).</param>
-    public ProxyService(SettingsStore settings, EngineHost engine, StatsCollector stats, AdultBlocklist? adult = null)
+    /// <param name="resolver">How a process id becomes a program (tests); the default asks the operating system.</param>
+    public ProxyService(SettingsStore settings, EngineHost engine, StatsCollector stats, AdultBlocklist? adult = null, ClientAppResolver? resolver = null)
     {
+        _resolver = resolver ?? new ClientAppResolver();
         _settings = settings;
         _engine = engine;
         _stats = stats;
@@ -52,6 +56,9 @@ public sealed class ProxyService : IDisposable
         _server.BeforeRequest += OnBeforeRequest;
         _server.BeforeResponse += OnBeforeResponse;
     }
+
+    /// <summary>The programs that went through the proxy in this run (for the Apps page).</summary>
+    public ObservedApps Apps { get; } = new();
 
     public ProxyState State { get; private set; } = ProxyState.Stopped;
 
@@ -159,6 +166,14 @@ public sealed class ProxyService : IDisposable
         var request = e.HttpClient.Request;
         var host = HostRules.Normalize(request.RequestUri?.Host ?? request.Host);
         var s = _settings.Current;
+
+        // A program the person chose to leave alone: its connection is passed through as it is (not opened, not refused).
+        if (IsSkipped(s, AppOf(e.HttpClient)))
+        {
+            e.DecryptSsl = false;
+            return Task.CompletedTask;
+        }
+
         e.DecryptSsl = s.ProtectionEnabled
                        && s.FilterHttps
                        && !MitmExclusionDefaults.IsBuiltInSslBypass(host)
@@ -174,6 +189,25 @@ public sealed class ProxyService : IDisposable
 
         return Task.CompletedTask;
     }
+
+    /// <summary>The program behind a connection (and note that it was seen). Null when that cannot be found out.</summary>
+    private ClientApp? AppOf(HttpWebClient client)
+    {
+        try
+        {
+            var app = _resolver.Resolve(client.ProcessId.Value);
+            if (app is not null) Apps.Record(app);
+            return app;
+        }
+        catch (Exception ex)
+        {
+            if (Interlocked.Exchange(ref _lookupWarned, 1) == 0) Log.Warn($"could not tell which program a connection comes from (not logged again): {ex.Message}");
+            return null;
+        }
+    }
+
+    private static bool IsSkipped(AppSettings s, ClientApp? app) =>
+        app is not null && s.SkippedApps.Exists(r => r.Exe == app.Exe);
 
     /// <summary>True when the adult-content filter is on and blocks this host (unless the person excluded the site).</summary>
     private bool IsAdultBlocked(AppSettings s, string host) =>
@@ -273,6 +307,8 @@ public sealed class ProxyService : IDisposable
         {
             return;
         }
+
+        if (IsSkipped(settings, AppOf(e.HttpClient))) return; // a program the person chose to leave alone
 
         string? Header(string name) => request.Headers.GetFirstHeader(name)?.Value;
         var type = RequestClassifier.Classify(url, Header);

@@ -17,7 +17,7 @@ Pluton Shield is a free ad blocker for Windows 10 and 11 in the spirit of AdGuar
 - **Stops advertising pop-up windows.**
 - **Removes tracking tags** from web addresses.
 - **Can block adult websites** (off by default) and keep SafeSearch on in Google, Bing, DuckDuckGo and YouTube.
-- **Lets you choose**: turn individual filter lists on or off, write your own rules, and exclude sites you never want filtered.
+- **Lets you choose**: turn individual filter lists on or off, write your own rules, exclude sites you never want filtered, and leave individual programs alone.
 - **Updates itself.** Filters refresh every few hours, and the app tells you when a new version of Pluton Shield is ready.
 - **Runs quietly** in the system tray and can start with Windows.
 - **Speaks English and Vietnamese** (it follows your Windows language, and you can change it in Settings).
@@ -41,6 +41,7 @@ Windows 10 (version 1809 or later) and Windows 11 are supported. You don't need 
 | **Home** | Turn protection on or off, see how much has been blocked, and press **Test protection** to check that everything works. |
 | **Filters** | See the filter version and update the filters right now. |
 | **Filter lists** | Turn individual lists on or off, search them, switch whole groups (ads, privacy, security, annoyances, countries), and turn on the adult-content filter. |
+| **Apps** | See the programs that connect through Pluton Shield and switch any of them off, so that Pluton Shield leaves that program completely alone. |
 | **My filters** | Write your own rules, and try an address to see whether it would be blocked. |
 | **Statistics** | See the most blocked sites and recent activity. |
 | **Settings** | Language, start with Windows, pop-up blocking, sites that are never filtered, the certificate, updates, and troubleshooting tools. |
@@ -62,6 +63,17 @@ At the top of *Filter lists* there is a switch, **Block adult content**. It is *
 - It needs protection to be **on**, and **HTTPS filtering** (the default) for the explanation page and for SafeSearch. With HTTPS filtering off, the connection to an adult site is simply refused and the browser shows an error.
 - It is a list, so it is not perfect: new or unlisted sites get through, and it does not stop a VPN, Tor, or a browser set to ignore the Windows proxy. It covers the Windows account it is installed in.
 - A site you added to *Sites that are never filtered* is never blocked by this filter.
+
+### Leaving a program alone
+
+The *Apps* page lists the programs that have connected to the internet through Pluton Shield since it started (your browser, Discord, a game launcher...). Each one has a switch. Turn it **off** and Pluton Shield leaves that program completely alone: its HTTPS connections are not opened, nothing is blocked, and SafeSearch is not applied. Use it when one program breaks, or refuses to connect, because of the filter, and you still want everything else filtered.
+
+- A program shows up in the list once it has used the network. If you cannot see it, open it, let it load something, and look again. **Add a program…** lets you pick its `.exe` file instead, even if it is not running.
+- A program is recognised by its **file name** (for example `discord.exe`), not by the folder it is in. Its switch therefore keeps working when the program updates itself into a new folder, and it also applies to any other program with the same file name.
+- **Filter all again** puts every program back on the filter.
+- Programs that do not use the Windows proxy are not filtered in the first place, so they are not listed. Switching off a *browser* means that browser is no longer filtered at all.
+- A change counts from the next request, but a secure connection that a program already has open keeps the way it was opened until it closes.
+- A program that runs as another user, or as administrator, may not be recognised. It is then filtered as usual.
 
 ### Writing your own rules
 
@@ -103,7 +115,7 @@ Make sure protection is on, then press **Test protection** on the Home page. It 
 Firefox keeps its own list of trusted certificates. In *Settings*, press **Open certificate folder (for Firefox)** and import the file in Firefox, or set `security.enterprise_roots.enabled` to `true` in `about:config`.
 
 **An app complains about a certificate or can't connect.**
-A few apps refuse to work with any ad blocker that inspects HTTPS. Add their address to *Sites that are never filtered*.
+A few apps refuse to work with any ad blocker that inspects HTTPS. Add their address to *Sites that are never filtered*, or switch the whole program off on the *Apps* page.
 
 **Start with Windows doesn't work.**
 Open *Settings* and make sure *Start with Windows* is on. Also check that Pluton Shield isn't switched off under *Windows Settings → Apps → Startup*. If it still doesn't start, press *Copy diagnostics report* in *Settings → Troubleshooting* and include it when you ask for help.

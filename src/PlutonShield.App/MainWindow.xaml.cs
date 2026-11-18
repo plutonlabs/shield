@@ -96,6 +96,7 @@ public sealed partial class MainWindow : Window
         {
             "filters" => typeof(FiltersPage),
             "lists" => typeof(FilterListsPage),
+            "apps" => typeof(AppsPage),
             "custom" => typeof(CustomFiltersPage),
             "stats" => typeof(StatsPage),
             "settings" => typeof(SettingsPage),

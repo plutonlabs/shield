@@ -64,6 +64,7 @@ public static class Diagnostics
         Line("Auto update", s.AutoUpdate ? $"every {s.UpdateIntervalHours} h" : "off");
         Line("App updates", s.AutoAppUpdate ? "checked automatically" : "manual only");
         Line("Excluded sites", s.ExcludedHosts.Count.ToString());
+        Line("Programs left alone", s.SkippedApps.Count.ToString());
 
         var st = rt.Stats.Snapshot();
         sb.AppendLine().AppendLine("This run");

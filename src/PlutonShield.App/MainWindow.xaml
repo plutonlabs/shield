@@ -16,6 +16,7 @@
                 <NavigationViewItem loc:L.Key="nav.home" Tag="home" Icon="Home" />
                 <NavigationViewItem loc:L.Key="nav.filters" Tag="filters" Icon="Filter" />
                 <NavigationViewItem loc:L.Key="nav.lists" Tag="lists" Icon="List" />
+                <NavigationViewItem loc:L.Key="nav.apps" Tag="apps" Icon="AllApps" />
                 <NavigationViewItem loc:L.Key="nav.custom" Tag="custom" Icon="Edit" />
                 <NavigationViewItem loc:L.Key="nav.stats" Tag="stats" Icon="Calendar" />
             </NavigationView.MenuItems>
